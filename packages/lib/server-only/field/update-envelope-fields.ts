@@ -61,7 +61,7 @@ export const updateEnvelopeFields = async ({
     });
   }
 
-  assertEnvelopeMutable(envelope);
+  await assertEnvelopeMutable(envelope);
 
   if (envelope.completedAt) {
     throw new AppError(AppErrorCode.INVALID_REQUEST, {
@@ -107,6 +107,12 @@ export const updateEnvelopeFields = async ({
     if (field.envelopeItemId && !envelope.envelopeItems.some((item) => item.id === field.envelopeItemId)) {
       throw new AppError(AppErrorCode.INVALID_REQUEST, {
         message: 'Envelope item not found',
+      });
+    }
+
+    if (field.fieldMeta?.required && field.fieldMeta?.readOnly) {
+      throw new AppError(AppErrorCode.INVALID_REQUEST, {
+        message: 'A field cannot be both read-only and required',
       });
     }
 

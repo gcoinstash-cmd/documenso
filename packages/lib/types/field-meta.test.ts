@@ -2,6 +2,7 @@ import { FieldType } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import {
   ZEnvelopeFieldAndMetaSchema,
+  ZFieldAndMetaSchema,
   ZFieldMetaNotOptionalSchema,
   ZFieldMetaSchema,
   ZTextFieldMeta,
@@ -67,6 +68,18 @@ describe('ZFieldMetaSchema - required and readOnly mutual exclusivity', () => {
 
   it('rejects fieldMeta when both required and readOnly are true via ZEnvelopeFieldAndMetaSchema', () => {
     const result = ZEnvelopeFieldAndMetaSchema.safeParse({
+      type: FieldType.TEXT,
+      fieldMeta: {
+        type: 'text',
+        required: true,
+        readOnly: true,
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects fieldMeta when both required and readOnly are true via ZFieldAndMetaSchema', () => {
+    const result = ZFieldAndMetaSchema.safeParse({
       type: FieldType.TEXT,
       fieldMeta: {
         type: 'text',

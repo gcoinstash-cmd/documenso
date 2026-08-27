@@ -1255,4 +1255,139 @@ test.describe('API V2 Envelopes', () => {
       expect(errorResponse.message).toContain('requires an email');
     });
   });
+
+  test.describe('Envelope field update-many endpoint', () => {
+    test('should reject field update when both required and readOnly are true and preserve database state', async ({
+      request,
+    }) => {
+      const payload = {
+        type: EnvelopeType.DOCUMENT,
+        title: 'Field Validation Test Document',
+      } satisfies TCreateEnvelopePayload;
+
+      const formData = new FormData();
+      formData.append('payload', JSON.stringify(payload));
+
+      const files = [
+        {
+          name: 'example.pdf',
+          data: fs.readFileSync(path.join(__dirname, '../../../../../assets/example.pdf')),
+        },
+      ];
+
+      for (const file of files) {
+        formData.append('files', new File([file.data], file.name, { type: 'application/pdf' }));
+      }
+
+      const createRes = await request.post(`${baseUrl}/envelope/create`, {
+        headers: { Authorization: `Bearer ${tokenA}` },
+        multipart: formData,
+      });
+
+      expect(createRes.ok()).toBeTruthy();
+      const createResponse = (await createRes.json()) as TCreateEnvelopeResponse;
+
+      // Create a recipient
+      const createRecipientsRequest: TCreateEnvelopeRecipientsRequest = {
+        envelopeId: createResponse.id,
+        data: [
+          {
+            email: userA.email,
+            name: userA.name || 'Test User',
+            role: RecipientRole.SIGNER,
+            accessAuth: [],
+            actionAuth: [],
+          },
+        ],
+      };
+
+      const createRecipientsRes = await request.post(`${baseUrl}/envelope/recipient/create-many`, {
+        headers: { Authorization: `Bearer ${tokenA}` },
+        data: createRecipientsRequest,
+      });
+
+      expect(createRecipientsRes.ok()).toBeTruthy();
+      const recipientsResponse = await createRecipientsRes.json();
+      const recipient = recipientsResponse.data[0];
+
+      // Get envelope to get envelopeItem ID
+      const getEnvelopeRes = await request.get(`${baseUrl}/envelope/${createResponse.id}`, {
+        headers: { Authorization: `Bearer ${tokenA}` },
+      });
+
+      const envelope: TGetEnvelopeResponse = await getEnvelopeRes.json();
+      const envelopeItem = envelope.envelopeItems[0];
+
+      // Create a valid initial field
+      const createFieldsRequest = {
+        envelopeId: createResponse.id,
+        data: [
+          {
+            recipientId: recipient.id,
+            envelopeItemId: envelopeItem.id,
+            type: FieldType.TEXT,
+            page: 1,
+            positionX: 10,
+            positionY: 10,
+            width: 50,
+            height: 20,
+            fieldMeta: {
+              type: 'text',
+              label: 'Original Text Field',
+              required: true,
+              readOnly: false,
+            },
+          },
+        ],
+      };
+
+      const createFieldsRes = await request.post(`${baseUrl}/envelope/field/create-many`, {
+        headers: { Authorization: `Bearer ${tokenA}` },
+        data: createFieldsRequest,
+      });
+
+      expect(createFieldsRes.ok()).toBeTruthy();
+      const createFieldsResponse = await createFieldsRes.json();
+      const createdField = createFieldsResponse.data[0];
+
+      const initialDbField = await prisma.field.findUniqueOrThrow({
+        where: { id: createdField.id },
+      });
+
+      // Attempt to update the field with both required: true and readOnly: true
+      const updateRes = await request.post(`${baseUrl}/envelope/field/update-many`, {
+        headers: { Authorization: `Bearer ${tokenA}` },
+        data: {
+          envelopeId: createResponse.id,
+          data: [
+            {
+              id: createdField.id,
+              type: FieldType.TEXT,
+              fieldMeta: {
+                type: 'text',
+                label: 'Invalid Field Mutation',
+                required: true,
+                readOnly: true,
+              },
+            },
+          ],
+        },
+      });
+
+      // Assert validation boundary rejection (HTTP 400)
+      expect(updateRes.ok()).toBeFalsy();
+      expect(updateRes.status()).toBe(400);
+
+      // Verify that database state remains completely unchanged and invalid state is not persisted
+      const dbFieldAfterUpdate = await prisma.field.findUniqueOrThrow({
+        where: { id: createdField.id },
+      });
+
+      expect(dbFieldAfterUpdate.fieldMeta).toEqual(initialDbField.fieldMeta);
+      expect(dbFieldAfterUpdate.fieldMeta).not.toMatchObject({
+        required: true,
+        readOnly: true,
+      });
+    });
+  });
 });
