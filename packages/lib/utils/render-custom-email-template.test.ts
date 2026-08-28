@@ -8,15 +8,15 @@ describe('renderCustomEmailTemplate', () => {
   });
 
   it('replaces multiple variables separated by whitespace', () => {
-    expect(
-      renderCustomEmailTemplate('Hi {name}, sign at {url}', { name: 'Sam', url: 'https://x' }),
-    ).toBe('Hi Sam, sign at https://x');
+    expect(renderCustomEmailTemplate('Hi {name}, sign at {url}', { name: 'Sam', url: 'https://x' })).toBe(
+      'Hi Sam, sign at https://x',
+    );
   });
 
   it('replaces adjacent variables and variables separated by a non-whitespace character', () => {
-    expect(
-      renderCustomEmailTemplate('{day}/{month}/{year}', { day: '01', month: '02', year: '2026' }),
-    ).toBe('01/02/2026');
+    expect(renderCustomEmailTemplate('{day}/{month}/{year}', { day: '01', month: '02', year: '2026' })).toBe(
+      '01/02/2026',
+    );
 
     expect(
       renderCustomEmailTemplate('{firstName}-{lastName}', {
@@ -28,5 +28,14 @@ describe('renderCustomEmailTemplate', () => {
 
   it('leaves the key in place when the variable is not provided', () => {
     expect(renderCustomEmailTemplate('Unknown {missing} here', {})).toBe('Unknown missing here');
+  });
+
+  it('replaces repeated instances of the same variable', () => {
+    expect(renderCustomEmailTemplate('{title} - {title} again', { title: 'Invoice' })).toBe('Invoice - Invoice again');
+  });
+
+  it('handles empty template strings and empty variable records gracefully', () => {
+    expect(renderCustomEmailTemplate('', {})).toBe('');
+    expect(renderCustomEmailTemplate('Plain text without tags', {})).toBe('Plain text without tags');
   });
 });
